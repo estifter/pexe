@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	_ "embed"
+	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -62,14 +63,29 @@ func compress(src string) (*bytes.Buffer, error) {
 }
 
 func main() {
-	projDir := os.Args[1]
-	entryFile := os.Args[2]
-	outFile := strings.TrimSuffix(entryFile, filepath.Ext(entryFile))
-	entrypoint := filepath.Join(projDir, entryFile)
+	projDir := flag.String("project", "", "The directory containing the entire Python project, including the virtual environment")
+	entryFile := flag.String("entrypoint", "", "The Python file to be the entrypoint of the project")
+	outFile := flag.String("out", "", "The name of the generated executable. Defaults to the name of the entrypoint")
+	flag.Parse()
+
+	if *projDir == "" {
+		fmt.Println("error: --project is required")
+		return
+	}
+
+	if *entryFile == "" {
+		fmt.Println("error: --entrypoint is required")
+	}
+
+	if *outFile == "" {
+		*outFile = strings.TrimSuffix(*entryFile, filepath.Ext(*entryFile))
+	}
+
+	entrypoint := filepath.Join(*projDir, *entryFile)
 	archivePath := filepath.Join(tmp, "archive.zip")
 	templatePath := filepath.Join(tmp, "template.go")
 
-	archive, err := compress(projDir)
+	archive, err := compress(*projDir)
 	if err != nil {
 		log.Print(fmt.Errorf("error during compression: %w", err))
 		return
@@ -101,7 +117,7 @@ func main() {
 	}
 
 	entryFlag := "-X main.entrypoint=" + entrypoint
-	cmd := exec.Command("go", "build", "-ldflags", entryFlag, "-o", outFile, templatePath)
+	cmd := exec.Command("go", "build", "-ldflags", entryFlag, "-o", *outFile, templatePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
